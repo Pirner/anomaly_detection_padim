@@ -5,3 +5,4 @@ from dataclasses import dataclass
 class PadimADConfig:
     model_name: str
     device: str
+    batch_size: int

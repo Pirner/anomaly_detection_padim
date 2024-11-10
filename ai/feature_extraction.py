@@ -1,6 +1,8 @@
+import torch
 from torchvision.models import wide_resnet50_2, resnet18
 
 from constants import constants_ai
+from ai.DTO import FeatureExtraction
 
 
 class FeatureExtractor:
@@ -46,3 +48,19 @@ class FeatureExtractor:
         self.model.layer1[-1].register_forward_hook(hook)
         self.model.layer2[-1].register_forward_hook(hook)
         self.model.layer3[-1].register_forward_hook(hook)
+
+    def extract_features(self, sample: torch.tensor) -> FeatureExtraction:
+        """
+        extract features from a given sample.
+        :param sample: sample to extract features from
+        :return:
+        """
+        _ = self.model(sample.to(self.device))
+
+        fe = FeatureExtraction(
+            layer_0=self.outputs[0].clone(),
+            layer_1=self.outputs[1].clone(),
+            layer_2=self.outputs[2].clone(),
+        )
+        self.outputs = []
+        return fe
