@@ -18,3 +18,19 @@ class DataTransform:
             T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
         return transform_x
+
+    @staticmethod
+    def get_test_transform(im_size=256, crop_size=224):
+        """
+        get transformation for training
+        :param im_size:  symmetric size to resize the image to
+        :param crop_size: center crop operation size
+        :return:
+        """
+        transform_x = T.Compose([
+            T.Resize(im_size, Image.LANCZOS),
+            T.CenterCrop(crop_size),
+            T.ToTensor(),
+            T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+        return transform_x

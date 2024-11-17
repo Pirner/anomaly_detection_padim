@@ -1,5 +1,7 @@
 import random
 
+import numpy as np
+import pickle
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -10,6 +12,9 @@ from config.DTO import PadimADConfig
 
 
 class PadimAnomalyDetector:
+
+    train_outputs = None
+
     """
     central class for managing to create, load, run and use anomaly detection based on PaDim.
     """
@@ -39,7 +44,7 @@ class PadimAnomalyDetector:
         print('[INFO] extracting features from training dataset: {}'.format(len(dataset)))
         feature_extractions = []
         for x in tqdm(train_dataloader, total=len(train_dataloader)):
-            fe = self.feat_extractor.extract_features(sample=x)
+            fe = self.feat_extractor.extract_features(in_sample=x)
             fe.detach_cpu()
             fe.move_to_device('cpu')
             feature_extractions.append(fe)
@@ -48,6 +53,21 @@ class PadimAnomalyDetector:
             layer_1=torch.cat([x.layer_1.clone() for x in feature_extractions], dim=0),
             layer_2=torch.cat([x.layer_2.clone() for x in feature_extractions], dim=0),
         )
-        feature_extractions = None
+        fe_summary.embed_vectors()
 
-        raise NotImplementedError
+        # randomly select d dimension
+        embedding_vectors = torch.index_select(fe_summary.embedded_vectors, 1, self.feat_extractor.idx)
+        # calculate multivariate Gaussian distribution
+        B, C, H, W = embedding_vectors.size()
+        embedding_vectors = embedding_vectors.view(B, C, H * W)
+        mean = torch.mean(embedding_vectors, dim=0).numpy()
+        cov = torch.zeros(C, C, H * W).numpy()
+        I = np.identity(C)
+        print('[INFO] creating covariance matrices for each pixel')
+        for i in tqdm(range(H * W), total=H * W):
+            cov[:, :, i] = np.cov(embedding_vectors[:, :, i].numpy(), rowvar=False) + 0.01 * I
+        # save learned distribution
+        self.train_outputs = [mean, cov]
+        with open('train_class.pkl', 'wb') as f:
+            pickle.dump(self.train_outputs, f)
+        print('[INFO] finished adjusting padim anomaly detector.')

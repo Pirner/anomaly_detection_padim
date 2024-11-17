@@ -15,6 +15,7 @@ def main():
     ad_detector = PadimAnomalyDetector(config=config)
     good_dataset = PadimDataset(data_path=path_good_data, transform=DataTransform.get_train_transform())
     ad_detector.train_anomaly_detection(dataset=good_dataset)
+    ad_dataset = PadimDataset(data_path=path_anomalous_data, transform=DataTransform.get_test_transform())
 
 
 if __name__ == '__main__':

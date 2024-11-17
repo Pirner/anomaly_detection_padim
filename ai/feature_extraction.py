@@ -1,3 +1,5 @@
+from random import sample
+
 import torch
 from torchvision.models import wide_resnet50_2, resnet18
 
@@ -17,6 +19,7 @@ class FeatureExtractor:
         self.d = 0
         self.device = device
         self.outputs = []
+        self.idx = None
         self.build_feature_extraction_model(model_name=model_name)
 
     def build_feature_extraction_model(self, model_name: str):
@@ -48,14 +51,15 @@ class FeatureExtractor:
         self.model.layer1[-1].register_forward_hook(hook)
         self.model.layer2[-1].register_forward_hook(hook)
         self.model.layer3[-1].register_forward_hook(hook)
+        self.idx = torch.tensor(sample(range(0, self.t_d), self.d))
 
-    def extract_features(self, sample: torch.tensor) -> FeatureExtraction:
+    def extract_features(self, in_sample: torch.tensor) -> FeatureExtraction:
         """
         extract features from a given sample.
-        :param sample: sample to extract features from
+        :param in_sample: sample to extract features from
         :return:
         """
-        _ = self.model(sample.to(self.device))
+        _ = self.model(in_sample.to(self.device))
 
         fe = FeatureExtraction(
             layer_0=self.outputs[0].clone(),
