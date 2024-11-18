@@ -1,8 +1,17 @@
 from PIL import Image
+import numpy as np
 from torchvision import transforms as T
 
 
 class DataTransform:
+    @staticmethod
+    def denormalize_image(x):
+        mean = np.array([0.485, 0.456, 0.406])
+        std = np.array([0.229, 0.224, 0.225])
+        x = (((x.transpose(1, 2, 0) * std) + mean) * 255.).astype(np.uint8)
+
+        return x
+
     @staticmethod
     def get_train_transform(im_size=256, crop_size=224):
         """
