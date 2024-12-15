@@ -40,10 +40,11 @@ class PadimAnomalyDetector:
         if config.device == 'cuda':
             torch.cuda.manual_seed_all(1024)
 
-    def train_anomaly_detection(self, dataset):
+    def train_anomaly_detection(self, dataset, progress_bar=None):
         """
         train an anomaly detection on a given dataset, good data without anomalies
         :param dataset: holds the data on which the AD is being tuned for.
+        :param progress_bar: if an ui element is involved provide a progress bar to modify
         :return:
         """
         # TODO pickle is broken here!!
@@ -54,11 +55,19 @@ class PadimAnomalyDetector:
         train_dataloader = DataLoader(dataset, batch_size=self.config.batch_size, pin_memory=True)
         print('[INFO] extracting features from training dataset: {}'.format(len(dataset)))
         feature_extractions = []
+
+        aux = 0
+
         for x in tqdm(train_dataloader, total=len(train_dataloader)):
             fe = self.feat_extractor.extract_features(in_sample=x)
             fe.detach_cpu()
             fe.move_to_device('cpu')
             feature_extractions.append(fe)
+            if progress_bar is not None:
+                step_width = 1 / len(train_dataloader)
+                aux += step_width
+                progress_bar.set(aux)
+            # progress_bar.step()
         fe_summary = FeatureExtraction(
             layer_0=torch.cat([x.layer_0.clone() for x in feature_extractions], dim=0),
             layer_1=torch.cat([x.layer_1.clone() for x in feature_extractions], dim=0),
@@ -75,8 +84,19 @@ class PadimAnomalyDetector:
         cov = torch.zeros(C, C, H * W).numpy()
         I = np.identity(C)
         print('[INFO] creating covariance matrices for each pixel')
+        aux = 0
+        if progress_bar is not None:
+            progress_bar.stop()
+            progress_bar.set(0)
         for i in tqdm(range(H * W), total=H * W):
             cov[:, :, i] = np.cov(embedding_vectors[:, :, i].numpy(), rowvar=False) + 0.01 * I
+
+            tmp = i % 100
+            if progress_bar is not None and i % 100 == 0:
+                print(tmp)
+                step_width = 1 / (H * W)
+                aux += step_width * 100
+                progress_bar.set(aux)
         # save learned distribution
         self.train_outputs = [mean, cov]
         with open('train_class.pkl', 'wb') as f:
