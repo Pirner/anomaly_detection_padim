@@ -26,6 +26,16 @@ class App(customtkinter.CTk):
     start_train_button = None
     train_progressbar = None
     train_thread = None
+    train_config = None
+    ad_detector = None
+    # inspection frame attributes
+    inspection_frame = None
+    inspect_header_stringvar = None
+    inspect_header = None
+    inspection_path_button = None
+    inspection_im_path = None
+    inspection_ctk_im = None
+    inspection_im_panel = None
 
     def __init__(self):
         super().__init__()
@@ -96,7 +106,7 @@ class App(customtkinter.CTk):
         self.frame_2_button.grid(row=2, column=0, sticky="ew")
 
         self.frame_3_button = customtkinter.CTkButton(
-            self.navigation_frame, corner_radius=0, height=40, border_spacing=10, text="Frame 3",
+            self.navigation_frame, corner_radius=0, height=40, border_spacing=10, text="Inspect",
             fg_color="transparent", text_color=("gray10", "gray90"), hover_color=("gray70", "gray30"),
             image=self.inspect, anchor="w", command=self.frame_3_button_event)
         self.frame_3_button.grid(row=3, column=0, sticky="ew")
@@ -132,7 +142,8 @@ class App(customtkinter.CTk):
         self.create_train_frame()
 
         # create third frame
-        self.third_frame = customtkinter.CTkFrame(self, corner_radius=0, fg_color="transparent")
+        self.inspection_frame = customtkinter.CTkFrame(self, corner_radius=0, fg_color="transparent")
+        self.create_inspection_frame()
 
         # select default frame
         self.select_frame_by_name("home")
@@ -191,6 +202,30 @@ class App(customtkinter.CTk):
         self.train_progressbar.set(0)
         self.train_progressbar.grid(row=2, column=1, padx=10, pady=5, columnspan=6)
 
+    def create_inspection_frame(self):
+        """
+        create inspection frame
+        :return:
+        """
+        self.inspect_header_stringvar = tkinter.StringVar(value="Inspection")
+        self.inspect_header = customtkinter.CTkLabel(
+            master=self.inspection_frame,
+            textvariable=self.inspect_header_stringvar,
+            width=250,
+            height=50,
+            bg_color="dodger blue",
+            corner_radius=16
+        )
+        self.inspect_header.grid(row=0, column=0, padx=20, pady=10)
+        self.inspection_path_button = customtkinter.CTkButton(
+            self.inspection_frame,
+            text="Load Image",
+            image=self.file_folder_image,
+            compound="right",
+            command=self.select_inspection_image,
+        )
+        self.inspection_path_button.grid(row=1, column=0, padx=20, pady=10)
+
     def select_frame_by_name(self, name):
         # set button color for selected button
         self.home_button.configure(fg_color=("gray75", "gray25") if name == "home" else "transparent")
@@ -207,9 +242,9 @@ class App(customtkinter.CTk):
         else:
             self.train_frame.grid_forget()
         if name == "frame_3":
-            self.third_frame.grid(row=0, column=1, sticky="nsew")
+            self.inspection_frame.grid(row=0, column=1, sticky="nsew")
         else:
-            self.third_frame.grid_forget()
+            self.inspection_frame.grid_forget()
 
     def home_button_event(self):
         self.select_frame_by_name("home")
@@ -234,6 +269,25 @@ class App(customtkinter.CTk):
         filepath = r'C:\data\mvtec\bottle\train\good'
         self.train_path_stringvar.set(filepath)
         self.init_train_data()
+
+    def select_inspection_image(self):
+        """
+        select an inspection image and load it into the GUI
+        :return:
+        """
+        self.inspection_im_path = r'C:\data\mvtec\bottle\test\broken_large\003.png'
+        print('[INFO] selected inspection image: {}'.format(self.inspection_im_path))
+        self.inspection_ctk_im = customtkinter.CTkImage(
+            light_image=Image.open(self.inspection_im_path),
+            dark_image=Image.open(self.inspection_im_path),
+            size=(300, 300),
+        )
+        self.inspection_im_panel = customtkinter.CTkLabel(
+            self.inspection_frame,
+            image=self.inspection_ctk_im,
+            text='',
+        )
+        self.inspection_im_panel.grid(row=1, column=1, padx=20, pady=10)
 
     def init_train_data(self):
         """
@@ -263,17 +317,17 @@ class App(customtkinter.CTk):
 
         :return:
         """
-        config = PadimADConfig(
+        self.train_config = PadimADConfig(
             model_name='wide_resnet50_2',
             device='cuda',
             batch_size=8
         )
-        ad_detector = PadimAnomalyDetector(config=config)
+        self.ad_detector = PadimAnomalyDetector(config=self.train_config)
         good_dataset = PadimDataset(
             data_path=self.train_path_stringvar.get(),
             transform=DataTransform.get_train_transform()
         )
-        ad_detector.train_anomaly_detection(dataset=good_dataset, progress_bar=self.train_progressbar)
+        self.ad_detector.train_anomaly_detection(dataset=good_dataset, progress_bar=self.train_progressbar)
 
     def start_training(self):
         self.train_thread = threading.Thread(target=self.run_training_thread)
