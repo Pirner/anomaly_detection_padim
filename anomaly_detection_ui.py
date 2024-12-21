@@ -4,6 +4,7 @@ import glob
 import threading
 
 import customtkinter
+import numpy as np
 from PIL import Image
 
 from config.DTO import PadimADConfig
@@ -28,6 +29,15 @@ class App(customtkinter.CTk):
     train_thread = None
     train_config = None
     ad_detector = None
+    # validation attributes within the training frame
+    val_path_button = None
+    val_path_stringvar = None
+    val_path_label = None
+    val_im_paths = None
+    val_images = None
+    val_progressbar = None
+    start_val_calibration_button = None
+    calibrate_image = None
     # inspection frame attributes
     inspection_frame = None
     inspect_header_stringvar = None
@@ -36,6 +46,9 @@ class App(customtkinter.CTk):
     inspection_im_path = None
     inspection_ctk_im = None
     inspection_im_panel = None
+    detect_anomalies_button = None
+    insp_result_ctk_im = None
+    insp_result_im_panel = None
 
     def __init__(self):
         super().__init__()
@@ -201,6 +214,81 @@ class App(customtkinter.CTk):
             master=self.train_frame, width=800, corner_radius=5, height=50)
         self.train_progressbar.set(0)
         self.train_progressbar.grid(row=2, column=1, padx=10, pady=5, columnspan=6)
+        self.create_validation_frame()
+
+    def create_validation_frame(self):
+        """
+        creates the validation frame within the training frame
+        :return:
+        """
+        self.val_path_button = customtkinter.CTkButton(
+            self.train_frame,
+            text="Set Val Path",
+            image=self.file_folder_image,
+            compound="right",
+            command=self.select_val_path,
+        )
+        self.val_path_button.grid(row=3, column=0, padx=20, pady=10)
+        self.val_path_stringvar = tkinter.StringVar(value="Not Set")
+
+        self.val_path_label = customtkinter.CTkLabel(
+            master=self.train_frame,
+            textvariable=self.val_path_stringvar,
+            # width=500,
+            # height=25,
+            bg_color="dodger blue",
+            corner_radius=16
+        )
+        self.val_path_label.grid(row=3, column=1, padx=20, pady=10)
+        self.calibrate_image = customtkinter.CTkImage(
+            Image.open(os.path.join(self.assets_path, "kalibrieren.png")), size=(20, 20))
+        self.start_val_calibration_button = customtkinter.CTkButton(
+            self.train_frame,
+            text="Calibrate",
+            image=self.calibrate_image,
+            compound="right",
+            command=self.calibrate_validation_data,
+        )
+        self.start_val_calibration_button.grid(row=4, column=0, padx=10, pady=5)
+        self.val_progressbar = customtkinter.CTkProgressBar(
+            master=self.train_frame, width=800, corner_radius=5, height=50)
+        self.val_progressbar.set(0)
+        self.val_progressbar.grid(row=4, column=1, padx=10, pady=5, columnspan=6)
+
+    def calibrate_validation_data(self):
+        """
+        calibrate the anomaly detector on the validation data.
+        :return:
+        """
+        raise NotImplementedError('no calibration on validation data')
+
+    def select_val_path(self):
+        filepath = tkinter.filedialog.askdirectory()
+        self.val_path_stringvar.set(filepath)
+        self.init_val_data()
+
+    def init_val_data(self):
+        """
+        initialize the validation data.
+        :return:
+        """
+        im_paths = glob.glob(os.path.join(self.val_path_stringvar.get(), '**/*.png'), recursive=True)
+        print('[INFO] found {} images for training'.format(len(im_paths)))
+        self.val_im_paths = im_paths
+        self.val_images = []
+        for i in range(self.n_sample_images):
+            tmp_im = customtkinter.CTkImage(
+                light_image=Image.open(self.val_im_paths[i]),
+                dark_image=Image.open(self.val_im_paths[i]),
+                size=(100, 100),
+            )
+            im_panel = customtkinter.CTkLabel(
+                self.train_frame,
+                image=tmp_im,
+                text='',
+            )
+            im_panel.grid(row=3, column=i + 2, padx=20, pady=10)
+            self.val_images.append(im_panel)
 
     def create_inspection_frame(self):
         """
@@ -225,6 +313,36 @@ class App(customtkinter.CTk):
             command=self.select_inspection_image,
         )
         self.inspection_path_button.grid(row=1, column=0, padx=20, pady=10)
+        # inspection button
+        self.detect_anomalies_button = customtkinter.CTkButton(
+            self.inspection_frame,
+            text="Detect Anomalies",
+            image=self.inspect,
+            compound="right",
+            command=self.detect_anomalies,
+        )
+        self.detect_anomalies_button.grid(row=2, column=0, padx=20, pady=10)
+
+    def detect_anomalies(self):
+        """
+
+        :return:
+        """
+        src_im = Image.open(self.inspection_im_path).convert('RGB')
+        anom_score = self.ad_detector.detect_anomaly(im=src_im, transform=DataTransform.get_test_transform())
+        anomaly_im = Image.fromarray(anom_score.astype(np.uint8))
+
+        self.insp_result_ctk_im = customtkinter.CTkImage(
+            light_image=anomaly_im,
+            dark_image=anomaly_im,
+            size=(256, 256),
+        )
+        self.insp_result_im_panel = customtkinter.CTkLabel(
+            self.inspection_frame,
+            image=self.insp_result_ctk_im,
+            text='',
+        )
+        self.insp_result_im_panel.grid(row=2, column=1, padx=20, pady=10)
 
     def select_frame_by_name(self, name):
         # set button color for selected button
@@ -264,9 +382,7 @@ class App(customtkinter.CTk):
         select the training path and display it in the GUI, also extract images
         :return:
         """
-        # TODO change to dialog
-        # filepath = tkinter.filedialog.askdirectory()
-        filepath = r'C:\data\mvtec\bottle\train\good'
+        filepath = tkinter.filedialog.askdirectory()
         self.train_path_stringvar.set(filepath)
         self.init_train_data()
 
@@ -275,12 +391,19 @@ class App(customtkinter.CTk):
         select an inspection image and load it into the GUI
         :return:
         """
+        # path_anomalous_data = r'C:\data\mvtec\bottle\test'
+        # ad_dataset = PadimDataset(data_path=path_anomalous_data, transform=DataTransform.get_test_transform())
+        # self.ad_detector.detect_anomalies_on_dataset(dataset=ad_dataset, path=r'C:\data\padim\anom')
+        # print('Finished on the anomalous dataset')
+
         self.inspection_im_path = r'C:\data\mvtec\bottle\test\broken_large\003.png'
+        file = tkinter.filedialog.askopenfile()
+        self.inspection_im_path = os.path.abspath(file.name)
         print('[INFO] selected inspection image: {}'.format(self.inspection_im_path))
         self.inspection_ctk_im = customtkinter.CTkImage(
             light_image=Image.open(self.inspection_im_path),
             dark_image=Image.open(self.inspection_im_path),
-            size=(300, 300),
+            size=(256, 256),
         )
         self.inspection_im_panel = customtkinter.CTkLabel(
             self.inspection_frame,

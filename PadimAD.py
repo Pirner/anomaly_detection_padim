@@ -91,9 +91,7 @@ class PadimAnomalyDetector:
         for i in tqdm(range(H * W), total=H * W):
             cov[:, :, i] = np.cov(embedding_vectors[:, :, i].numpy(), rowvar=False) + 0.01 * I
 
-            tmp = i % 100
             if progress_bar is not None and i % 100 == 0:
-                print(tmp)
                 step_width = 1 / (H * W)
                 aux += step_width * 100
                 progress_bar.set(aux)
@@ -103,10 +101,68 @@ class PadimAnomalyDetector:
             pickle.dump(self.train_outputs, f)
         print('[INFO] finished adjusting padim anomaly detector.')
 
+    def detect_anomaly(self, im, transform):
+        """
+        detect anomaly on an image.
+        :param im: image to detect anomaly on.
+        :param transform: transformations to apply to the image being sent
+        :return:
+        """
+        with torch.no_grad():
+            x_in = transform(im)
+            x_in = torch.unsqueeze(x_in, 0)
+            fe = self.feat_extractor.extract_features(in_sample=x_in)
+            fe.detach_cpu()
+            fe.move_to_device('cpu')
+
+        fe.embed_vectors()
+        embedding_vectors = torch.index_select(fe.embedded_vectors, 1, self.feat_extractor.idx)
+
+        # calculate distance matrix
+        B, C, H, W = embedding_vectors.size()
+        embedding_vectors = embedding_vectors.view(B, C, H * W).numpy()
+        dist_list = []
+        for i in tqdm(range(H * W), total=H * W):
+            mean = self.train_outputs[0][:, i]
+            conv_inv = np.linalg.inv(self.train_outputs[1][:, :, i])
+            dist = [mahalanobis(sample[:, i], mean, conv_inv) for sample in embedding_vectors]
+            dist_list.append(dist)
+
+        dist_list = np.array(dist_list).transpose(1, 0).reshape(B, H, W)
+        # up-sample
+        dist_list = torch.tensor(dist_list)
+        score_map = F.interpolate(
+            dist_list.unsqueeze(1),
+            size=x_in.size(2),
+            mode='bilinear',
+            align_corners=False
+        ).squeeze().numpy()
+
+        # apply gaussian smoothing on the score map
+        for i in range(score_map.shape[0]):
+            score_map[i] = gaussian_filter(score_map[i], sigma=4)
+
+        # Normalization
+        max_score = score_map.max()
+        min_score = score_map.min()
+        max_score = 40.0
+        min_score = 0.0
+        scores = (score_map - min_score) / (max_score - min_score)
+
+        threshold = int(0.356 * 255)
+
+        # im.save("origin.png")
+        test_score_map = (scores * 255).astype(np.uint8)
+        (T, thresh) = cv2.threshold(test_score_map, threshold, 255, cv2.THRESH_BINARY)
+        return test_score_map
+        # cv2.imwrite("score_map.png", test_score_map)
+        # cv2.imwrite(os.path.join(path, '{:02d}_thresh.png'.format(i)), thresh)
+
     def detect_anomalies_on_dataset(self, dataset, path: str):
         """
         detect anomalies on an entire dataset
         :param dataset: test-dataset to detect anomalies on.
+        :param path: write results into a path
         :return:
         """
         test_dataloader = DataLoader(dataset, batch_size=self.config.batch_size, pin_memory=True)
