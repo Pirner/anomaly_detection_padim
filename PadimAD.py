@@ -167,10 +167,8 @@ class PadimAnomalyDetector:
             score_map[i] = gaussian_filter(score_map[i], sigma=4)
 
         # Normalization
-        max_score = score_map.max()
-        min_score = score_map.min()
-        max_score = 40.0
-        min_score = 0.0
+        max_score = self.cal_max_score
+        min_score = self.cal_min_score
         scores = (score_map - min_score) / (max_score - min_score)
 
         threshold = int(0.356 * 255)
@@ -239,7 +237,7 @@ class PadimAnomalyDetector:
         max_score = score_map.max()
         min_score = score_map.min()
 
-        self.cal_max_score = max_score
+        self.cal_max_score = max_score * 2
         self.cal_min_score = min_score
 
     def detect_anomalies_on_dataset(self, dataset, path: str):
