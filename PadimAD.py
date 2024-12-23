@@ -20,6 +20,8 @@ from data.transform import DataTransform
 class PadimAnomalyDetector:
 
     train_outputs = None
+    cal_min_score = -1  # detected minimum score on the calibrated data
+    cal_max_score = -1  # detected maximum score on the calibrated data
 
     """
     central class for managing to create, load, run and use anomaly detection based on PaDim.
@@ -88,6 +90,7 @@ class PadimAnomalyDetector:
         if progress_bar is not None:
             progress_bar.stop()
             progress_bar.set(0)
+
         for i in tqdm(range(H * W), total=H * W):
             cov[:, :, i] = np.cov(embedding_vectors[:, :, i].numpy(), rowvar=False) + 0.01 * I
 
@@ -95,8 +98,28 @@ class PadimAnomalyDetector:
                 step_width = 1 / (H * W)
                 aux += step_width * 100
                 progress_bar.set(aux)
-        # save learned distribution
+
+        # save the temporary training outputs on mean and covariance
         self.train_outputs = [mean, cov]
+        conv_inv_list = []
+        aux = 0
+        if progress_bar is not None:
+            progress_bar.stop()
+            progress_bar.set(0)
+
+        for i in tqdm(range(H * W), total=H * W):
+            conv_inv = np.linalg.inv(self.train_outputs[1][:, :, i])
+            conv_inv_list.append(conv_inv)
+
+            if progress_bar is not None and i % 100 == 0:
+                step_width = 1 / (H * W)
+                aux += step_width * 100
+                progress_bar.set(aux)
+
+        # conv_inv_list = np.array(conv_inv_list).transpose(1, 0).reshape(C, H * W)
+        # save learned distribution
+        self.train_outputs = [mean, cov, conv_inv_list]
+
         with open('train_class.pkl', 'wb') as f:
             pickle.dump(self.train_outputs, f)
         print('[INFO] finished adjusting padim anomaly detector.')
@@ -124,7 +147,8 @@ class PadimAnomalyDetector:
         dist_list = []
         for i in tqdm(range(H * W), total=H * W):
             mean = self.train_outputs[0][:, i]
-            conv_inv = np.linalg.inv(self.train_outputs[1][:, :, i])
+            # conv_inv = np.linalg.inv(self.train_outputs[1][:, :, i])
+            conv_inv = self.train_outputs[2][i]
             dist = [mahalanobis(sample[:, i], mean, conv_inv) for sample in embedding_vectors]
             dist_list.append(dist)
 
@@ -155,8 +179,68 @@ class PadimAnomalyDetector:
         test_score_map = (scores * 255).astype(np.uint8)
         (T, thresh) = cv2.threshold(test_score_map, threshold, 255, cv2.THRESH_BINARY)
         return test_score_map
-        # cv2.imwrite("score_map.png", test_score_map)
-        # cv2.imwrite(os.path.join(path, '{:02d}_thresh.png'.format(i)), thresh)
+
+    def calibrate_anomalies_on_dataset(self, dataset):
+        """
+        calibrate the anomaly detector on a dataset to extract maximum and minimum score.
+        The calibration dataset should not contain any anomalies in it, because that would cause the anomaly detector
+        to corrupt.
+        :param dataset: validation data to calibrate on
+        :return:
+        """
+        test_dataloader = DataLoader(dataset, batch_size=self.config.batch_size, pin_memory=True)
+
+        test_images = []
+        test_fes = []
+        for x in tqdm(test_dataloader, '| feature extraction | test |'):
+            test_images.extend(x.cpu().detach().numpy())
+            with torch.no_grad():
+                fe = self.feat_extractor.extract_features(in_sample=x)
+                fe.detach_cpu()
+                fe.move_to_device('cpu')
+                test_fes.append(fe)
+
+        fe_summary = FeatureExtraction(
+            layer_0=torch.cat([x.layer_0.clone() for x in test_fes], dim=0),
+            layer_1=torch.cat([x.layer_1.clone() for x in test_fes], dim=0),
+            layer_2=torch.cat([x.layer_2.clone() for x in test_fes], dim=0),
+        )
+        fe_summary.embed_vectors()
+        # randomly select d dimension
+        embedding_vectors = torch.index_select(fe_summary.embedded_vectors, 1, self.feat_extractor.idx)
+
+        # calculate distance matrix
+        B, C, H, W = embedding_vectors.size()
+        embedding_vectors = embedding_vectors.view(B, C, H * W).numpy()
+        dist_list = []
+        for i in tqdm(range(H * W), total=H * W):
+            mean = self.train_outputs[0][:, i]
+            # conv_inv = np.linalg.inv(self.train_outputs[1][:, :, i])
+            conv_inv = self.train_outputs[2][i]
+            dist = [mahalanobis(sample[:, i], mean, conv_inv) for sample in embedding_vectors]
+            dist_list.append(dist)
+
+        dist_list = np.array(dist_list).transpose(1, 0).reshape(B, H, W)
+
+        # upsample
+        dist_list = torch.tensor(dist_list)
+        score_map = F.interpolate(
+            dist_list.unsqueeze(1),
+            size=x.size(2),
+            mode='bilinear',
+            align_corners=False
+        ).squeeze().numpy()
+
+        # apply gaussian smoothing on the score map
+        for i in range(score_map.shape[0]):
+            score_map[i] = gaussian_filter(score_map[i], sigma=4)
+
+        # Normalization
+        max_score = score_map.max()
+        min_score = score_map.min()
+
+        self.cal_max_score = max_score
+        self.cal_min_score = min_score
 
     def detect_anomalies_on_dataset(self, dataset, path: str):
         """
@@ -212,8 +296,8 @@ class PadimAnomalyDetector:
             score_map[i] = gaussian_filter(score_map[i], sigma=4)
 
         # Normalization
-        max_score = score_map.max()
-        min_score = score_map.min()
+        max_score = self.cal_max_score
+        min_score = self.cal_min_score
         scores = (score_map - min_score) / (max_score - min_score)
         score_diff = scores.max() - scores.min()
         threshold = int(0.356 * 255)

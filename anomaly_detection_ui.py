@@ -260,7 +260,13 @@ class App(customtkinter.CTk):
         calibrate the anomaly detector on the validation data.
         :return:
         """
-        raise NotImplementedError('no calibration on validation data')
+        val_dataset = PadimDataset(
+            data_path=self.val_path_stringvar.get(),
+            transform=DataTransform.get_train_transform()
+        )
+        self.ad_detector.calibrate_anomalies_on_dataset(dataset=val_dataset)
+        print(self.ad_detector.cal_min_score)
+        print(self.ad_detector.cal_max_score)
 
     def select_val_path(self):
         filepath = tkinter.filedialog.askdirectory()
@@ -325,7 +331,7 @@ class App(customtkinter.CTk):
 
     def detect_anomalies(self):
         """
-
+        detect anomalies of an image selected in the ui
         :return:
         """
         src_im = Image.open(self.inspection_im_path).convert('RGB')
