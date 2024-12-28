@@ -6,5 +6,19 @@ dataset with different needs.
 
 ## Get Started
 
+install all the requirements
+````commandline
+pip install -r requirements.txt
+````
+
 ## How to use the GUI
 this repository provides
+
+## Roadmap
+
+- [ ] Add Variable Image Sizes to the Padim Anomaly Detector
+- [ ] Forward the variable image size to the GUI
+- [ ] Add status message for training and calibration part
+- [ ] rework home frame
+- [ ] create api to serve the anomaly detection results
+- [ ] add storing anomaly detectors (serializing to disk)
