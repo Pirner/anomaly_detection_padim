@@ -38,6 +38,7 @@ class App(customtkinter.CTk):
     val_progressbar = None
     start_val_calibration_button = None
     calibrate_image = None
+    calibration_thread = None
     # inspection frame attributes
     inspection_frame = None
     inspect_header_stringvar = None
@@ -264,9 +265,14 @@ class App(customtkinter.CTk):
             data_path=self.val_path_stringvar.get(),
             transform=DataTransform.get_train_transform()
         )
-        self.ad_detector.calibrate_anomalies_on_dataset(dataset=val_dataset)
-        print(self.ad_detector.cal_min_score)
-        print(self.ad_detector.cal_max_score)
+        self.calibration_thread = threading.Thread(
+            target=self.ad_detector.calibrate_anomalies_on_dataset,
+            args=(val_dataset, self.val_progressbar)
+        )
+        self.calibration_thread.start()
+        # self.ad_detector.calibrate_anomalies_on_dataset(dataset=val_dataset, progress_bar=self.val_progressbar)
+        # print(self.ad_detector.cal_min_score)
+        # print(self.ad_detector.cal_max_score)
 
     def select_val_path(self):
         filepath = tkinter.filedialog.askdirectory()

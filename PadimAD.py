@@ -178,18 +178,24 @@ class PadimAnomalyDetector:
         (T, thresh) = cv2.threshold(test_score_map, threshold, 255, cv2.THRESH_BINARY)
         return test_score_map
 
-    def calibrate_anomalies_on_dataset(self, dataset):
+    def calibrate_anomalies_on_dataset(self, dataset, progress_bar=None):
         """
         calibrate the anomaly detector on a dataset to extract maximum and minimum score.
         The calibration dataset should not contain any anomalies in it, because that would cause the anomaly detector
         to corrupt.
         :param dataset: validation data to calibrate on
+        :param progress_bar: if using the gui, use a progress bar to show the progress to the end user
         :return:
         """
         test_dataloader = DataLoader(dataset, batch_size=self.config.batch_size, pin_memory=True)
 
         test_images = []
         test_fes = []
+        aux = 0
+        if progress_bar is not None:
+            progress_bar.stop()
+            progress_bar.set(0)
+
         for x in tqdm(test_dataloader, '| feature extraction | test |'):
             test_images.extend(x.cpu().detach().numpy())
             with torch.no_grad():
@@ -197,6 +203,11 @@ class PadimAnomalyDetector:
                 fe.detach_cpu()
                 fe.move_to_device('cpu')
                 test_fes.append(fe)
+
+            if progress_bar is not None:
+                step_width = 1 / len(test_dataloader)
+                aux += step_width
+                progress_bar.set(aux)
 
         fe_summary = FeatureExtraction(
             layer_0=torch.cat([x.layer_0.clone() for x in test_fes], dim=0),
@@ -211,12 +222,21 @@ class PadimAnomalyDetector:
         B, C, H, W = embedding_vectors.size()
         embedding_vectors = embedding_vectors.view(B, C, H * W).numpy()
         dist_list = []
+        aux = 0
+        if progress_bar is not None:
+            progress_bar.stop()
+            progress_bar.set(0)
         for i in tqdm(range(H * W), total=H * W):
             mean = self.train_outputs[0][:, i]
             # conv_inv = np.linalg.inv(self.train_outputs[1][:, :, i])
             conv_inv = self.train_outputs[2][i]
             dist = [mahalanobis(sample[:, i], mean, conv_inv) for sample in embedding_vectors]
             dist_list.append(dist)
+
+            if progress_bar is not None and i % 100 == 0:
+                step_width = 1 / (H * W)
+                aux += step_width * 100
+                progress_bar.set(aux)
 
         dist_list = np.array(dist_list).transpose(1, 0).reshape(B, H, W)
 
