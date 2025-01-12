@@ -4,6 +4,7 @@ import glob
 import threading
 
 import customtkinter
+import cv2
 import numpy as np
 from PIL import Image
 
@@ -11,6 +12,7 @@ from config.DTO import PadimADConfig
 from data.dataset import PadimDataset
 from data.transform import DataTransform
 from PadimAD import PadimAnomalyDetector
+from vision.rendering import VisionRendering
 
 
 class App(customtkinter.CTk):
@@ -50,6 +52,12 @@ class App(customtkinter.CTk):
     detect_anomalies_button = None
     insp_result_ctk_im = None
     insp_result_im_panel = None
+    slider = None
+    slider_value = None
+    insp_result_bin_image_ctk_im = None
+    insp_result_bin_im_panel = None
+    insp_result_vis_image_ctk_im = None
+    insp_result_vis_im_panel = None
 
     def __init__(self):
         super().__init__()
@@ -69,7 +77,8 @@ class App(customtkinter.CTk):
 
         # load images with light and dark mode image
         self.assets_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "images")
-        self.logo_image = customtkinter.CTkImage(Image.open(os.path.join(self.assets_path, "logo.png")), size=(26, 26))
+        self.logo_image = customtkinter.CTkImage(
+            Image.open(os.path.join(self.assets_path, "anomaly.png")), size=(26, 26))
         self.large_test_image = customtkinter.CTkImage(
             Image.open(os.path.join(self.assets_path, "logo.png")), size=(500, 150))
         self.image_icon_image = customtkinter.CTkImage(
@@ -100,7 +109,7 @@ class App(customtkinter.CTk):
 
         self.navigation_frame_label = customtkinter.CTkLabel(
             self.navigation_frame,
-            text="  Image Example",
+            text="Anomaly Detector",
             image=self.logo_image,
             compound="left",
             font=customtkinter.CTkFont(size=15, weight="bold"),
@@ -128,7 +137,6 @@ class App(customtkinter.CTk):
         self.appearance_mode_menu = customtkinter.CTkOptionMenu(
             self.navigation_frame, values=["Light", "Dark", "System"],
             command=self.change_appearance_mode_event)
-        self.appearance_mode_menu.grid(row=6, column=0, padx=20, pady=20, sticky="s")
 
         # create home frame
         self.home_frame = customtkinter.CTkFrame(self, corner_radius=0, fg_color="transparent")
@@ -335,11 +343,21 @@ class App(customtkinter.CTk):
         )
         self.detect_anomalies_button.grid(row=2, column=0, padx=20, pady=10)
 
+        self.slider = customtkinter.CTkSlider(self.inspection_frame, from_=0, to=255, command=self.print_slider)
+        self.slider.grid(row=3, column=0, padx=(20, 10), pady=(10, 10))
+        self.slider_value = customtkinter.CTkLabel(
+            self.inspection_frame,
+            image=self.inspection_ctk_im,
+            text='{}'.format(self.slider.get()),
+        )
+        self.slider_value.grid(row=3, column=1, padx=20, pady=10)
+
     def detect_anomalies(self):
         """
         detect anomalies of an image selected in the ui
         :return:
         """
+        self.slider.configure(to=255)
         src_im = Image.open(self.inspection_im_path).convert('RGB')
         anom_score = self.ad_detector.detect_anomaly(im=src_im, transform=DataTransform.get_test_transform())
         anomaly_im = Image.fromarray(anom_score.astype(np.uint8))
@@ -355,6 +373,44 @@ class App(customtkinter.CTk):
             text='',
         )
         self.insp_result_im_panel.grid(row=2, column=1, padx=20, pady=10)
+
+        ret, bin_image_arr = cv2.threshold(anom_score.astype(np.uint8), self.slider.get(), 255, cv2.THRESH_BINARY)
+        bin_image = Image.fromarray(bin_image_arr)
+        self.insp_result_bin_image_ctk_im = customtkinter.CTkImage(
+            light_image=bin_image,
+            dark_image=bin_image,
+            size=(256, 256),
+        )
+        self.insp_result_bin_im_panel = customtkinter.CTkLabel(
+            self.inspection_frame,
+            image=self.insp_result_bin_image_ctk_im,
+            text='',
+        )
+        self.insp_result_bin_im_panel.grid(row=2, column=2, padx=20, pady=10)
+
+        # draw visualized version into the frame
+        src_im_arr = cv2.imread(self.inspection_im_path)
+        bin_image_arr = cv2.resize(
+            bin_image_arr.astype(np.uint8),
+            (src_im_arr.shape[1], src_im_arr.shape[0]), cv2.INTER_LINEAR_EXACT)
+        visualized = VisionRendering.visualize_binary_im_on_rgb(bgr_im=src_im_arr, bin_im=bin_image_arr)
+        self.insp_result_vis_image_ctk_im = customtkinter.CTkImage(
+            light_image=Image.fromarray(visualized),
+            dark_image=Image.fromarray(visualized),
+            size=(256, 256),
+        )
+        self.insp_result_vis_im_panel = customtkinter.CTkLabel(
+            self.inspection_frame,
+            image=self.insp_result_vis_image_ctk_im,
+            text='',
+        )
+        self.insp_result_vis_im_panel.grid(row=1, column=2, padx=20, pady=10)
+
+    def print_slider(self, value):
+        print(value)
+        # self.slider.configure(to=300)
+        self.slider_value.configure(text=value)
+        # value = self.slider.get()
 
     def select_frame_by_name(self, name):
         # set button color for selected button
@@ -403,11 +459,6 @@ class App(customtkinter.CTk):
         select an inspection image and load it into the GUI
         :return:
         """
-        # path_anomalous_data = r'C:\data\mvtec\bottle\test'
-        # ad_dataset = PadimDataset(data_path=path_anomalous_data, transform=DataTransform.get_test_transform())
-        # self.ad_detector.detect_anomalies_on_dataset(dataset=ad_dataset, path=r'C:\data\padim\anom')
-        # print('Finished on the anomalous dataset')
-
         self.inspection_im_path = r'C:\data\mvtec\bottle\test\broken_large\003.png'
         file = tkinter.filedialog.askopenfile()
         self.inspection_im_path = os.path.abspath(file.name)
