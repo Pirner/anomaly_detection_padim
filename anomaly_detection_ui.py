@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from gui.gui_enums.ad_status import ADStatus
 from config.DTO import PadimADConfig
 from data.dataset import PadimDataset
 from data.transform import DataTransform
@@ -18,7 +19,9 @@ from vision.rendering import VisionRendering
 class App(customtkinter.CTk):
     app_mode = None
     assets_path = None
+    ad_status = None
     # training frame attributes
+    train_status_label = None
     whistle_image = None
     train_im_paths = None
     train_images = None
@@ -31,6 +34,7 @@ class App(customtkinter.CTk):
     train_thread = None
     train_config = None
     ad_detector = None
+    train_status_stringvar = None
     # validation attributes within the training frame
     val_path_button = None
     val_path_stringvar = None
@@ -61,6 +65,9 @@ class App(customtkinter.CTk):
 
     def __init__(self):
         super().__init__()
+        # status variables
+        # self.temp_var = ADStatus.not_calibrated
+        self.ad_status = ADStatus.not_calibrated
 
         # variables instantiated later on
         self.train_path_stringvar = None
@@ -186,6 +193,17 @@ class App(customtkinter.CTk):
             corner_radius=16
         )
         self.train_header.grid(row=0, column=0, padx=20, pady=10)
+
+        self.train_status_stringvar = tkinter.StringVar(value=str(self.ad_status))
+        self.train_status_label = customtkinter.CTkLabel(
+            master=self.train_frame,
+            textvariable=self.train_status_stringvar,
+            width=250,
+            height=50,
+            bg_color="dodger blue",
+            corner_radius=16
+        )
+        self.train_status_label.grid(row=0, column=1, padx=20, pady=10)
 
         self.train_path_button = customtkinter.CTkButton(
             self.train_frame,
@@ -445,6 +463,10 @@ class App(customtkinter.CTk):
         self.app_mode = new_appearance_mode
         customtkinter.set_appearance_mode(new_appearance_mode)
 
+    def change_ad_status(self, new_status: ADStatus):
+        self.ad_status = new_status
+        self.train_status_stringvar.set(str(self.ad_status))
+
     def select_train_path(self):
         """
         select the training path and display it in the GUI, also extract images
@@ -513,7 +535,9 @@ class App(customtkinter.CTk):
             data_path=self.train_path_stringvar.get(),
             transform=DataTransform.get_train_transform()
         )
+        self.change_ad_status(new_status=ADStatus.calibrating)
         self.ad_detector.train_anomaly_detection(dataset=good_dataset, progress_bar=self.train_progressbar)
+        self.change_ad_status(new_status=ADStatus.calibrated)
 
     def start_training(self):
         self.train_thread = threading.Thread(target=self.run_training_thread)
