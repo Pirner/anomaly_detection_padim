@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from gui.gui_components.train_parameters_widget import TrainParametersWidget
 from gui.gui_enums.ad_status import ADStatus
 from config.DTO import PadimADConfig
 from data.dataset import PadimDataset
@@ -67,6 +68,7 @@ class App(customtkinter.CTk):
         super().__init__()
         # status variables
         # self.temp_var = ADStatus.not_calibrated
+        self.train_parameters_widget = None
         self.ad_status = ADStatus.not_calibrated
 
         # variables instantiated later on
@@ -241,6 +243,9 @@ class App(customtkinter.CTk):
             master=self.train_frame, width=800, corner_radius=5, height=50)
         self.train_progressbar.set(0)
         self.train_progressbar.grid(row=2, column=1, padx=10, pady=5, columnspan=6)
+        # create
+        self.train_parameters_widget = TrainParametersWidget(self.train_frame, corner_radius=0, fg_color="transparent")
+        self.train_parameters_widget.grid(row=6, column=0)
         self.create_validation_frame()
 
     def create_validation_frame(self):
@@ -289,7 +294,10 @@ class App(customtkinter.CTk):
         """
         val_dataset = PadimDataset(
             data_path=self.val_path_stringvar.get(),
-            transform=DataTransform.get_train_transform()
+            transform=DataTransform.get_train_transform(
+                im_size=self.train_parameters_widget.im_size,
+                crop_size=self.train_parameters_widget.im_size,
+            )
         )
         self.calibration_thread = threading.Thread(
             target=self.ad_detector.calibrate_anomalies_on_dataset,
@@ -377,7 +385,8 @@ class App(customtkinter.CTk):
         """
         self.slider.configure(to=255)
         src_im = Image.open(self.inspection_im_path).convert('RGB')
-        anom_score = self.ad_detector.detect_anomaly(im=src_im, transform=DataTransform.get_test_transform())
+        anom_score = self.ad_detector.detect_anomaly(im=src_im, transform=DataTransform.get_test_transform(
+            im_size=self.train_parameters_widget.im_size, crop_size=self.train_parameters_widget.im_size))
         anomaly_im = Image.fromarray(anom_score.astype(np.uint8))
 
         self.insp_result_ctk_im = customtkinter.CTkImage(
@@ -533,7 +542,10 @@ class App(customtkinter.CTk):
         self.ad_detector = PadimAnomalyDetector(config=self.train_config)
         good_dataset = PadimDataset(
             data_path=self.train_path_stringvar.get(),
-            transform=DataTransform.get_train_transform()
+            transform=DataTransform.get_train_transform(
+                im_size=self.train_parameters_widget.im_size,
+                crop_size=self.train_parameters_widget.im_size,
+            )
         )
         self.change_ad_status(new_status=ADStatus.calibrating)
         self.ad_detector.train_anomaly_detection(dataset=good_dataset, progress_bar=self.train_progressbar)
