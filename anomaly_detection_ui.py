@@ -385,8 +385,14 @@ class App(customtkinter.CTk):
         """
         self.slider.configure(to=255)
         src_im = Image.open(self.inspection_im_path).convert('RGB')
-        anom_score = self.ad_detector.detect_anomaly(im=src_im, transform=DataTransform.get_test_transform(
-            im_size=self.train_parameters_widget.im_size, crop_size=self.train_parameters_widget.im_size))
+        anom_score = self.ad_detector.detect_anomaly(
+            im=src_im,
+            transform=DataTransform.get_test_transform(
+                im_size=self.train_parameters_widget.im_size,
+                crop_size=self.train_parameters_widget.im_size
+            ),
+            normalize=True,
+        )
         anomaly_im = Image.fromarray(anom_score.astype(np.uint8))
 
         self.insp_result_ctk_im = customtkinter.CTkImage(

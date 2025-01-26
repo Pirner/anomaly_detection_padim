@@ -124,11 +124,12 @@ class PadimAnomalyDetector:
             pickle.dump(self.train_outputs, f)
         print('[INFO] finished adjusting padim anomaly detector.')
 
-    def detect_anomaly(self, im, transform):
+    def detect_anomaly(self, im, transform, normalize=False):
         """
         detect anomaly on an image.
         :param im: image to detect anomaly on.
         :param transform: transformations to apply to the image being sent
+        :param normalize: normalize the output map
         :return:
         """
         with torch.no_grad():
@@ -169,13 +170,13 @@ class PadimAnomalyDetector:
         # Normalization
         max_score = self.cal_max_score
         min_score = self.cal_min_score
-        scores = (score_map - min_score) / (max_score - min_score)
+        print('max detected on anomaly: {}, max detected on cal: {}'.format(np.max(score_map), max_score))
+        print('min detected on anomaly: {}, min detected on cal: {}'.format(np.min(score_map), min_score))
+        max_score = max(self.cal_max_score, np.max(score_map))
+        test_score_map = (score_map - min_score) / (max_score - min_score)
 
-        threshold = int(0.356 * 255)
-
-        # im.save("origin.png")
-        test_score_map = (scores * 255).astype(np.uint8)
-        (T, thresh) = cv2.threshold(test_score_map, threshold, 255, cv2.THRESH_BINARY)
+        if normalize:
+            test_score_map = (test_score_map * 255).astype(np.uint8)
         return test_score_map
 
     def calibrate_anomalies_on_dataset(self, dataset, progress_bar=None):
