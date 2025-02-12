@@ -3,8 +3,8 @@ from random import sample
 import torch
 from torchvision.models import wide_resnet50_2, resnet18
 
-from constants import constants_ai
-from ai.DTO import FeatureExtraction
+from src.constants import constants_ai
+from src.ai.DTO import FeatureExtraction
 
 
 class FeatureExtractor:

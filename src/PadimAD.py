@@ -50,7 +50,7 @@ class PadimAnomalyDetector:
         :return:
         """
         # TODO pickle is broken here!!
-        with open('train_class.pkl', 'rb') as f:
+        with open('../train_class.pkl', 'rb') as f:
             self.train_outputs = pickle.load(f)
         # return
 
@@ -120,7 +120,7 @@ class PadimAnomalyDetector:
         # save learned distribution
         self.train_outputs = [mean, cov, conv_inv_list]
 
-        with open('train_class.pkl', 'wb') as f:
+        with open('../train_class.pkl', 'wb') as f:
             pickle.dump(self.train_outputs, f)
         print('[INFO] finished adjusting padim anomaly detector.')
 
