@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from src.ressource_handling import ResourcesUtils
 from gui.gui_components.train_parameters_widget import TrainParametersWidget
 from gui.gui_enums.ad_status import ADStatus
 from config.DTO import PadimADConfig
@@ -21,6 +22,11 @@ class App(customtkinter.CTk):
     app_mode = None
     assets_path = None
     ad_status = None
+
+    # home frame relevant
+    home_frame_large_image_label = None
+    home_text_frame_intro = None
+
     # training frame attributes
     train_status_label = None
     whistle_image = None
@@ -78,6 +84,8 @@ class App(customtkinter.CTk):
 
         # constructor code
         self.title("anomaly_detection_ui.py")
+        self.height = 800
+        self.width = 1400
         self.geometry("1400x800")
 
         # set grid layout 1x2
@@ -94,6 +102,10 @@ class App(customtkinter.CTk):
             Image.open(os.path.join(self.assets_path, "logo.png")), size=(20, 20))
         self.file_folder_image = customtkinter.CTkImage(
             Image.open(os.path.join(self.assets_path, "file-and-folder.png")), size=(20, 20))
+        self.home_image_intro_icon = customtkinter.CTkImage(
+            Image.open(os.path.join(self.assets_path, "home_intro_logo.png")),
+            size=(512, 512)
+        )
 
         self.home_image = customtkinter.CTkImage(
             light_image=Image.open(os.path.join(self.assets_path, "home.png")),
@@ -148,24 +160,9 @@ class App(customtkinter.CTk):
             command=self.change_appearance_mode_event)
 
         # create home frame
-        self.home_frame = customtkinter.CTkFrame(self, corner_radius=0, fg_color="transparent")
+        self.home_frame = customtkinter.CTkScrollableFrame(self, corner_radius=0, fg_color="transparent")
         self.home_frame.grid_columnconfigure(0, weight=1)
-
-        self.home_frame_large_image_label = customtkinter.CTkLabel(
-            self.home_frame, text="", image=self.large_test_image)
-        self.home_frame_large_image_label.grid(row=0, column=0, padx=20, pady=10)
-
-        self.home_frame_button_1 = customtkinter.CTkButton(self.home_frame, text="", image=self.image_icon_image)
-        self.home_frame_button_1.grid(row=1, column=0, padx=20, pady=10)
-        self.home_frame_button_2 = customtkinter.CTkButton(
-            self.home_frame, text="CTkButton", image=self.image_icon_image, compound="right")
-        self.home_frame_button_2.grid(row=2, column=0, padx=20, pady=10)
-        self.home_frame_button_3 = customtkinter.CTkButton(
-            self.home_frame, text="CTkButton", image=self.image_icon_image, compound="top")
-        self.home_frame_button_3.grid(row=3, column=0, padx=20, pady=10)
-        self.home_frame_button_4 = customtkinter.CTkButton(
-            self.home_frame, text="CTkButton", image=self.image_icon_image, compound="bottom", anchor="w")
-        self.home_frame_button_4.grid(row=4, column=0, padx=20, pady=10)
+        self.create_home_frame()
 
         # create second frame
         self.train_frame = customtkinter.CTkFrame(self, corner_radius=0, fg_color="transparent")
@@ -179,7 +176,61 @@ class App(customtkinter.CTk):
         # select default frame
         self.select_frame_by_name("home")
         # TODO debug - set back to home, for implementation reasons
-        self.select_frame_by_name("frame_2")
+        # self.select_frame_by_name("frame_2")
+
+    def create_home_frame(self):
+        """
+        create the home frame for the anomaly detection ui
+        :return:
+        """
+        self.home_frame_large_image_label = customtkinter.CTkLabel(
+            self.home_frame, text="", image=self.home_image_intro_icon)
+        self.home_frame_large_image_label.grid(row=0, column=0, padx=20, pady=10)
+        self.home_text_frame_intro = customtkinter.CTkFrame(
+            master=self.home_frame,
+            width=int(self.width - 0.3 * self.width),
+            height=150,
+
+        )
+        self.home_text_frame_intro.grid(row=1, column=0, padx=20, pady=20)
+        textbox = customtkinter.CTkTextbox(
+            self.home_text_frame_intro,
+            width=int(self.width - 0.3 * self.width),
+            height=150,
+            activate_scrollbars=False,
+        )
+        textbox.insert("0.0", ResourcesUtils.read_introduction_text(resources_filepath='ressources.json'))
+        textbox.grid(row=0, column=0, pady=20, padx=20)
+
+        textbox_step_training = customtkinter.CTkTextbox(
+            self.home_text_frame_intro,
+            width=int(self.width - 0.3 * self.width),
+            height=150,
+            activate_scrollbars=False,
+        )
+        textbox_step_training.insert(
+            "0.0", ResourcesUtils.read_step_training_text(resources_filepath='ressources.json'))
+        textbox_step_training.grid(row=1, column=0, pady=20, padx=20)
+
+        textbox_step_calibration = customtkinter.CTkTextbox(
+            self.home_text_frame_intro,
+            width=int(self.width - 0.3 * self.width),
+            height=150,
+            activate_scrollbars=False,
+        )
+        textbox_step_calibration.insert(
+            "0.0", ResourcesUtils.read_step_calibration_text(resources_filepath='ressources.json'))
+        textbox_step_calibration.grid(row=2, column=0, pady=20, padx=20)
+
+        textbox_step_detecting = customtkinter.CTkTextbox(
+            self.home_text_frame_intro,
+            width=int(self.width - 0.3 * self.width),
+            height=80,
+            activate_scrollbars=False,
+        )
+        textbox_step_detecting.insert(
+            "0.0", ResourcesUtils.read_step_detecting_text(resources_filepath='ressources.json'))
+        textbox_step_detecting.grid(row=3, column=0, pady=20, padx=20)
 
     def create_train_frame(self):
         for i in range(self.n_train_columns):
