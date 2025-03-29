@@ -2,6 +2,7 @@ import os
 import tkinter
 import glob
 import threading
+os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 
 import customtkinter
 import cv2
